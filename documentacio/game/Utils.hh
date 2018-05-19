@@ -14,6 +14,7 @@
 #include <fstream>
 #include <string>
 #include <queue>
+#include <list>
 #include <stack>
 #include <vector>
 #include <map>
