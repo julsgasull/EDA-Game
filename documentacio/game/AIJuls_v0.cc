@@ -5,7 +5,7 @@
  * with the same name and .cc extension.
  */
 
-#define PLAYER_NAME noname
+#define PLAYER_NAME Juls_v0
 
 
 // DISCLAIMER: The following Demo player is *not* meant to do anything
@@ -85,7 +85,8 @@ struct PLAYER_NAME : public Player {
     	// ... and try to throw a parachuter, without even EXAMINING THE LAND
     	int ii = in.pos.i + random(-2, 2);
     	int jj = in.pos.j + random(-2, 2);
-    	if (pos_ok(ii, jj)) command_parachuter(ii, jj);
+		
+    	if (fire_time(ii, jj) == 0) command_parachuter(ii, jj); //no fire and correct position
   	}
   
 	/**
