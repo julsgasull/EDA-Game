@@ -54,13 +54,14 @@ struct PLAYER_NAME : public Player {
 		  	}
     	}
 		
-		//MODIFICAR
+		//MODIFICAR -> BORRAR
 		//pilla un random en cas de no poder atacar
     	ii = i + random(-1, 1);
 		jj = j + random(-1, 1);
 		
 		if (pos_ok(ii, jj)) command_soldier(id, ii, jj);
 		
+		//EL QUE REALMENT HAIG DE FER
 		//buscar cami
 		//posarli proxima posicio a fer
   	}
@@ -158,10 +159,8 @@ struct PLAYER_NAME : public Player {
   	}
 
 	void throw_parachuter(int helicopter_id) //pilla posicio random dins del helicopter, i el tira
-	{ //MODIFICAR
-    	// We get the data of the helicopter...
+	{
     	Data in = data(helicopter_id);
-    	// ... and try to throw a parachuter, without even EXAMINING THE LAND
 		for (int ii = in.pos.i - 2; ii <= in.pos.i + 2; ii++)
 		{
 			for (int jj = in.pos.j - 2; jj <= in.pos.j + 2; jj++)
