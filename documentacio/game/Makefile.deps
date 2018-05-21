@@ -20,3 +20,4 @@ Settings.o: Settings.cc Settings.hh Structs.hh Utils.hh Defs.hh
 State.o: State.cc State.hh Structs.hh Utils.hh Defs.hh
 Structs.o: Structs.cc Structs.hh Utils.hh Defs.hh
 Utils.o: Utils.cc Utils.hh Defs.hh
+buscar.o: buscar.cc

@@ -13,6 +13,40 @@
 // Please use AINull.cc as a template for your player.
 
 
+
+//void pathFinder(Position& Begin, Position& End, vector< vector<int> >& d, list<Position>& p, bool W)
+//{ //if W = treu the unit can fly
+//	d = vector< vector<int> >(60, vector<int>(60));
+//	vector< vector<int> > S(60, vector<int>(60));
+//	priority_queue<Position, vector<Position>, greater<Position> > Q;
+//	Q.push(Begin);
+//
+//	while(not Q.empty())
+//	{
+//		auto u = Q.top();
+//		Q.pop();
+//		if(not S[u.i][u.j])
+//		{
+//			S[u.i][u.j] = true;
+//			for (int x = 0; x < 8; ++x)
+//			{
+//				Position v = u + adj[x];
+//				int c = what(v.i, v.j);
+//				if( not((W or c == WATER) or c == MOUNTAIN))
+//				{
+//					if(d[v.i][v.j] > d[u.i][u.j] + 1)
+//					{
+//						d[v.i] = d[u.i] + 1;
+//						d[v.j] = d[u.j] + 1;
+//						p.insert(u, p.end());
+//					}
+//				}
+//			}
+//		}
+//	}
+//}
+
+
 struct PLAYER_NAME : public Player {
 
 	/**
@@ -30,7 +64,19 @@ struct PLAYER_NAME : public Player {
 
 	static constexpr int I[8] = { 1, 1, 0, -1, -1, -1,  0,  1 };
 	static constexpr int J[8] = { 0, 1, 1,  1,  0, -1, -1, -1 };
+	
+	static constexpr int I_h[8] = { 1, 0, -1,  0 };
+	static constexpr int J_h[8] = { 0, 1,  0, -1 };
 
+	
+	/*
+	 1. Si adjacent -> ataco
+	 2. En un post meu ocupat per alguns	//TO-DO: quants
+	 3. Per a cada soldat que no estigui a un post -> mirar post mes proper:
+	 		si no és teu -> hi vas
+	 		si és teu -> mirar quanta gent hi ha -> si suficients, buscar seguent post
+	 (tenir en compte quanta punts)
+	*/
   	void play_soldier(int id)	//mira adjacents i si pot, ataca. si no pot, es mou amb random
 	{
 		Data in = data(id);
@@ -62,7 +108,7 @@ struct PLAYER_NAME : public Player {
 		if (pos_ok(ii, jj)) command_soldier(id, ii, jj);
 		
 		//EL QUE REALMENT HAIG DE FER
-		//buscar cami
+		//buscar cami -> dijkstra o com putes s'escrigui
 		//posarli proxima posicio a fer
   	}
 	
@@ -83,48 +129,28 @@ struct PLAYER_NAME : public Player {
 	|			|			|
 59	-------------------------
 */
-	bool in_my_quadrant(int i, int j)
+	int quadrant(int i, int j)
 	{
-		int pl = me();
-		
-		switch (pl) {
-			case 0:
-				if ((0 <= i and i <= 29) and (0 <= j and j <= 29)) return true;
-				return false;
-				break;
-			case 1:
-				if ((30 <= i and i <= 59) and (0 <= j and j <= 29)) return true;
-				return false;
-				break;
-			case 2:
-				if ((0 <= i and i <= 29) and (30 <= j and j <= 59)) return true;
-				return false;
-				break;
-			case 3:
-				if ((30 <= i and i <= 59) and (30 <= j and j <= 59)) return true;
-				return false;
-				break;
-			default:
-				return false;
-				break;
-		}
+		if (( 0 <= i and i <= 29) and ( 0 <= j and j <= 29)) return 0;
+		if ((30 <= i and i <= 59) and ( 0 <= j and j <= 29)) return 1;
+		if (( 0 <= i and i <= 29) and (30 <= j and j <= 59)) return 2;
+		if ((30 <= i and i <= 59) and (30 <= j and j <= 59)) return 3;
+		return -1;
 	}
+
 	
-//	int num_posts_conq(int pl)
-//	{
-//		int sum = 0;
-//		vector<Post> p = posts();
-//		for (int i = 0; i < NUM_POSTS; i++)
-//		{
-//			if (p[i].player == pl) ++sum;
-//		}
-//		return sum;
-//	}
-	
+	/*
+	 1. Si no estic al meu quadrant / a sota hi tinc més jugadors -> tiro napalm
+	 2. Anar cap als llocs dels enemics de 2 en 2 (adjacents), perque no pots anar en diagonal
+	 3. Si arribes al final / muntanya, girar 90 graus.
+	*/
 	void play_helicopter(int id)	//tira napalm si pot i es va movent endavant (20% de girar clockwise)
 	{
 		Data in = data(id);
-		if (in.napalm == 0) { //data(id).napalm = 0 quan no t'has desperar rondes per llençar-lo
+		
+		/*------- 1 -------*/
+		if (in.napalm == 0) //data(id).napalm = 0 quan no t'has desperar rondes per llençar-lo
+		{
 			int own = 0;
 			int others = 0;
 			for (int ii = in.pos.i - 2; ii <= in.pos.i + 2; ii++)
@@ -143,13 +169,55 @@ struct PLAYER_NAME : public Player {
 					}
 				}
 			}
-			if (not in_my_quadrant(in.pos.i, in.pos.j) or others > own)
+			if (quadrant(in.pos.i, in.pos.j) != me() or others > own)
 			{
 				command_helicopter(id, NAPALM);
 				return;
 			}
 		}
+		/*------- /1 -------*/
 		
+		/*------- 2 -------*/
+		int ii = in.pos.i;
+		int jj = in.pos.j;
+		if (pos_ok(ii, jj))
+		{
+			int o = in.orientation;
+			if ((o == 0 and pos_ok(ii - 1, jj) and what(ii - 1, jj) != 4)	//SOUTH
+				or
+				(o == 1 and pos_ok(ii, jj + 1) and what(ii, jj + 1) != 4)	//EAST
+				or
+				(o == 2 and pos_ok(ii + 1, jj) and what(ii + 1, jj) != 4)	//NORTH
+				or
+				(o == 3 and pos_ok(ii, jj - 1) and what(ii, jj - 1) != 4)	//WEST
+				)
+			{
+				command_helicopter(id, FORWARD2); //si no pot fer 2, en fara 1
+			}
+		/*------- /2 -------*/
+		/*------- 3 -------*/
+			else
+			{
+				int q = quadrant(ii, jj);
+				if (o == 0 or o == 2)	//SOUTH or NORTH
+				{
+					//no puc passar -> vaig al de la dreta
+					if (q == 0 or q == 2) command_helicopter(id, COUNTER_CLOCKWISE);
+					//no puc passar -> vaig al de l'esquerra
+					else if (q == 1 or q == 3) command_helicopter(id, CLOCKWISE);
+					
+				}
+				else if (o == 1 or o == 3) //EAST or WEST
+				{
+					//mo puc passar -> vaig al d'abaix
+					if (q == 0 or q == 1) command_helicopter(id, CLOCKWISE);
+					//no no puc passar -> vaig al de dalt
+					else if (q == 2 or q == 3) command_helicopter(id, COUNTER_CLOCKWISE);
+				}
+			}
+			return;
+		}
+		/*------- /3 -------*/
 
 		//MODIFICAR
 		// With probability 20% we turn counter clockwise,
@@ -160,18 +228,21 @@ struct PLAYER_NAME : public Player {
 
 	void throw_parachuter(int helicopter_id) //pilla posicio random dins del helicopter, i el tira
 	{
-    	Data in = data(helicopter_id);
-		for (int ii = in.pos.i - 2; ii <= in.pos.i + 2; ii++)
+		if (round()%2 == 0)	//cada 2 rondes per no haver d'estar tot el rato tirant
 		{
-			for (int jj = in.pos.j - 2; jj <= in.pos.j + 2; jj++)
+			Data in = data(helicopter_id);
+			for (int ii = in.pos.i - 2; ii <= in.pos.i + 2; ii++)
 			{
-				if (fire_time(ii, jj) == 0 and what(ii, jj) != 3)
-				{ //no fire and correct position && no water (no pot ser mountain perq no hi van els helicopters)
-					int s = which_soldier(ii, jj);
-					if (s == 0 or s == -1)	//no hi ha soldats abaix
-					{
-						command_parachuter(ii, jj);
-						return;
+				for (int jj = in.pos.j - 2; jj <= in.pos.j + 2; jj++)
+				{
+					if (fire_time(ii, jj) == 0 and what(ii, jj) != 3)
+					{ //no fire and correct position && no water (no pot ser mountain perq no hi van els helicopters)
+						int s = which_soldier(ii, jj);
+						if (s == 0 or s == -1)	//no hi ha soldats abaix
+						{
+							command_parachuter(ii, jj);
+							return;
+						}
 					}
 				}
 			}
