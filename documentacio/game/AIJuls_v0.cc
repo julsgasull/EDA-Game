@@ -6,6 +6,7 @@
  */
 
 #define PLAYER_NAME Juls_v0
+#define MAX_INT 100000000
 
 
 // DISCLAIMER: The following Demo player is *not* meant to do anything
@@ -13,21 +14,11 @@
 // Please use AINull.cc as a template for your player.
 
 
-
-/*
- struct Position {
- 	int r, c;
- 	Position(int r, int c) {
- 		this->r = r;
- 		this->c = c;
- 	}
- };
- */
-
 vector< vector<char> > Board (60, vector<char> (60, '.'));
 
 
-struct PLAYER_NAME : public Player {
+struct PLAYER_NAME : public Player
+{
 
 	/**
 	* Factory: returns a new instance of this class.
@@ -45,7 +36,9 @@ struct PLAYER_NAME : public Player {
 	static constexpr int I[8] = { 1, 1, 0, -1, -1, -1,  0,  1 };
 	static constexpr int J[8] = { 0, 1, 1,  1,  0, -1, -1, -1 };
 
-	
+	/*-------------------------------------------------------*/
+	/*------------------------ SCAN -------------------------*/
+	/*-------------------------------------------------------*/
 	void scan()
 	{
 		int mi = me();
@@ -53,38 +46,53 @@ struct PLAYER_NAME : public Player {
 		{
 			for (int j = 0; j < 60; j++)
 			{
-				if (Board[i][j] != 'X')
+				if (Board[i][j] != 'M' or Board[i][j] != 'W')
 				{
 					int p = post_owner(i, j);
 					int id2 = which_soldier(i, j);
 					
-					if (what(i, j) > 2) Board[i][j] = 'X';							// water or mountain
-					else if (fire_time(i, j) > 0) Board[i][j] = 'F';				// fire
-					else if (id2 > 0 and data(id2).player != mi) Board[i][j] = 'E';	// enemy
-					else if (p != -2 and p != mi) Board[i][j] = 'P';				// post
-					else Board[i][j] = '.';											// grass or forest
+					if (what(i, j) == 4) Board[i][j] = 'M';							// mountain -> M
+					else if (what(i, j) == 3) Board[i][j] = 'W';					// water -> W
+					else if (fire_time(i, j) > 0) Board[i][j] = 'F';				// fire -> F
+					else if (id2 > 0 and data(id2).player != mi) Board[i][j] = 'E';	// enemy -> E
+					else if (p != -2 and p != mi) Board[i][j] = 'P';				// post -> P
+					else Board[i][j] = '.';											// grass or forest -> .
 				}
 			}
 		}
 	}
 	
-	struct Node
+	
+	
+	/*-------------------------------------------------------*/
+	/*----------------------- SOLDIER -----------------------*/
+	/*-------------------------------------------------------*/
+
+	struct Node	// for a*
 	{
 		int parent_i, parent_j;
 		int f, g, h;
 	};
 	
-	bool isValid(int row, int col, int id)	//si soldat pot passar
+	bool isValid(int row, int col, int id)	// soldier can go there
 	{
-		auto soldaditus = soldiers(me());
-		for (auto& soldadu : soldaditus)
+		Data id2 = data(id);
+		for (int pl = 0; pl < NUM_PLAYERS; pl++)
 		{
-			if (id != soldadu) {
-				auto mi_suldadu = data(soldadu);
-				if (mi_suldadu.pos.i == row and mi_suldadu.pos.j == col)
-					return false;
+			auto soldiers_vector = soldiers(pl);
+			for (auto& soldiers_it : soldiers_vector)
+			{
+				if (id != soldiers_it)
+				{
+					auto act_soldier = data(soldiers_it);
+					
+					if ((pl == me() and act_soldier.pos.i == row and act_soldier.pos.j == col) or
+						(pl != me() and act_soldier.pos.i == row and act_soldier.pos.j == col and act_soldier.life > id2.life))
+					{
+						return false;
+					}
+				}
 			}
-			
 		}
 		return (pos_ok(row, col) and what(row, col) <= 2 and fire_time(row, col) == 0);
 	}
@@ -108,7 +116,6 @@ struct PLAYER_NAME : public Player {
 		// cerr << "tracing path...";
 		
 		stack<pair<int, int>> path;
-		
 		while (not (cellDetails[row][col].parent_i == row and cellDetails[row][col].parent_j == col))
 		{
 			// cerr << "in row: " << row << " col: " << col << endl;
@@ -136,13 +143,13 @@ struct PLAYER_NAME : public Player {
 		if (isDestination(src.i, src.j, dest)) return src;
 		if (not isValid (src.i, src.j, id) or not isValid (dest.i, dest.j, id)) return Position(-1, -1);
 		vector< vector<bool> > closedList (60, vector<bool> (60, false));
-		// cerr << "(" << src.i << " " << src.j << ") (" << dest.i << " " << dest.j << ")" << endl;
+		// // cerr << "(" << src.i << " " << src.j << ") (" << dest.i << " " << dest.j << ")" << endl;
 		Node n;
 		n.parent_i = -1;
 		n.parent_j = -1;
-		n.f = INT_MAX;
-		n.g = INT_MAX;
-		n.h = INT_MAX;
+		n.f = MAX_INT;
+		n.g = MAX_INT;
+		n.h = MAX_INT;
 		vector< vector<Node> > cellDetails(60, vector<Node> (60, n));
 		
 		cellDetails[src.i][src.j].f        = 0;
@@ -178,36 +185,36 @@ struct PLAYER_NAME : public Player {
 			  /    |    \
 			 S.W    S   S.E
 			 
-			 Cell-->Popped Cell 	(i, j)
-			 N -->  North       	(i-1, j)
-			 S -->  South       	(i+1, j)
-			 E -->  East        	(i, j+1)
-			 W -->  West         	(i, j-1)
-			 N.E--> North-East  	(i-1, j+1)
-			 N.W--> North-West  	(i-1, j-1)
-			 S.E--> South-East  	(i+1, j+1)
-			 S.W--> South-West  	(i+1, j-1)
+			 Cell --> Popped Cell 	(i   ,   j)
+			 N    --> North       	(i-1 ,   j)
+			 S    --> South       	(i+1 ,   j)
+			 E    --> East        	(i   , j+1)
+			 W    --> West         	(i   , j-1)
+			 N.E  --> North-East  	(i-1 , j+1)
+			 N.W  --> North-West  	(i-1 , j-1)
+			 S.E  --> South-East  	(i+1 , j+1)
+			 S.W  --> South-West  	(i+1 , j-1)
 			 */
 			
 			
 			// NORTH
 			if (isValid(i-1, j, id))
 			{
-				// cerr << "north" << endl;
-				if (isDestination(i - 1, j, dest))
-				{	// Es mi destino
+				// // cerr << "north" << endl;
+				if (isDestination(i - 1, j, dest))			// my destination
+				{
 					cellDetails[i - 1][j].parent_i = i;
 					cellDetails[i - 1][j].parent_j = j;
 					foundDest = true;
 					return tracePath(cellDetails, dest, src);
 				}
-				else if (not closedList[i-1][j])
-				{	// No es mi destino y hay que iterarlo
+				else if (not closedList[i-1][j])			// not my destination -> increm.
+				{
 					new_g = cellDetails[i][j].g + 1;
 					new_h = calculateHValue (i-1, j, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i-1][j].f == INT_MAX or cellDetails[i-1][j].f > new_f)
+					if (cellDetails[i-1][j].f == MAX_INT or cellDetails[i-1][j].f > new_f)
 					{
 						openList.insert(make_pair(new_f, make_pair(i - 1, j)));
 						
@@ -223,7 +230,7 @@ struct PLAYER_NAME : public Player {
 			// SOUTH
 			if (isValid(i+1, j, id))
 			{
-				// cerr << "south" << endl;
+				// // cerr << "south" << endl;
 				if (isDestination(i + 1, j, dest))
 				{
 					cellDetails[i + 1][j].parent_i = i;
@@ -237,7 +244,7 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue (i+1, j, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i+1][j].f == INT_MAX or cellDetails[i+1][j].f > new_f)
+					if (cellDetails[i+1][j].f == MAX_INT or cellDetails[i+1][j].f > new_f)
 					{
 						openList.insert(make_pair(new_f, make_pair(i + 1, j)));
 						cellDetails[i + 1][j].f        = new_f;
@@ -252,7 +259,7 @@ struct PLAYER_NAME : public Player {
 			// EAST
 			if (isValid (i, j+1, id))
 			{
-				// cerr << "east" << endl;
+				// // cerr << "east" << endl;
 				if (isDestination(i, j+1, dest))
 				{
 					cellDetails[i][j + 1].parent_i = i;
@@ -266,7 +273,7 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue (i, j+1, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i][j+1].f == INT_MAX or cellDetails[i][j+1].f > new_f)
+					if (cellDetails[i][j+1].f == MAX_INT or cellDetails[i][j+1].f > new_f)
 					{
 						openList.insert(make_pair(new_f, make_pair(i, j + 1)));
 						cellDetails[i][j + 1].f        = new_f;
@@ -281,7 +288,7 @@ struct PLAYER_NAME : public Player {
 			// WEST
 			if (isValid (i, j-1, id))
 			{
-				// cerr << "west" << endl;
+				// // cerr << "west" << endl;
 				if (isDestination(i, j-1, dest))
 				{
 					cellDetails[i][j - 1].parent_i = i;
@@ -295,7 +302,7 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue (i, j-1, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i][j-1].f == INT_MAX or cellDetails[i][j-1].f > new_f)
+					if (cellDetails[i][j-1].f == MAX_INT or cellDetails[i][j-1].f > new_f)
 					{
 						openList.insert(make_pair(new_f, make_pair(i, j - 1)));
 						cellDetails[i][j - 1].f        = new_f;
@@ -310,7 +317,7 @@ struct PLAYER_NAME : public Player {
 			// NORTH-EAST
 			if (isValid(i-1, j+1, id))
 			{
-				// cerr << "north east" << endl;
+				// // cerr << "north east" << endl;
 				if (isDestination(i-1, j+1, dest))
 				{
 					cellDetails[i - 1][j + 1].parent_i = i;
@@ -324,11 +331,9 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue(i - 1, j + 1, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i-1][j+1].f == INT_MAX or cellDetails[i-1][j+1].f > new_f)
+					if (cellDetails[i-1][j+1].f == MAX_INT or cellDetails[i-1][j+1].f > new_f)
 					{
 						openList.insert( make_pair (new_f, make_pair(i-1, j+1)));
-						
-						// Update the details of this cell
 						cellDetails[i-1][j+1].f        = new_f;
 						cellDetails[i-1][j+1].g        = new_g;
 						cellDetails[i-1][j+1].h        = new_h;
@@ -341,7 +346,7 @@ struct PLAYER_NAME : public Player {
 			// NORTH-WEST
 			if (isValid (i-1, j-1, id))
 			{
-				// cerr << "north west" << endl;
+				// // cerr << "north west" << endl;
 				if (isDestination (i-1, j-1, dest))
 				{
 					cellDetails[i-1][j-1].parent_i = i;
@@ -355,7 +360,7 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue(i-1, j-1, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i-1][j-1].f == INT_MAX or cellDetails[i-1][j-1].f > new_f)
+					if (cellDetails[i-1][j-1].f == MAX_INT or cellDetails[i-1][j-1].f > new_f)
 					{
 						openList.insert( make_pair (new_f, make_pair (i-1, j-1)));
 						cellDetails[i-1][j-1].f        = new_f;
@@ -370,7 +375,7 @@ struct PLAYER_NAME : public Player {
 			// SOUTH-EAST
 			if (isValid(i+1, j+1, id))
 			{
-				// cerr << "south east" << endl;
+				// // cerr << "south east" << endl;
 				if (isDestination(i+1, j+1, dest))
 				{
 					cellDetails[i+1][j+1].parent_i = i;
@@ -384,10 +389,9 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue(i+1, j+1, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i+1][j+1].f == INT_MAX or cellDetails[i+1][j+1].f > new_f)
+					if (cellDetails[i+1][j+1].f == MAX_INT or cellDetails[i+1][j+1].f > new_f)
 					{
 						openList.insert(make_pair(new_f, make_pair (i+1, j+1)));
-						
 						cellDetails[i+1][j+1].f        = new_f;
 						cellDetails[i+1][j+1].g        = new_g;
 						cellDetails[i+1][j+1].h        = new_h;
@@ -400,10 +404,10 @@ struct PLAYER_NAME : public Player {
 			// SOUTH-WEST
 			if (isValid (i+1, j-1, id))
 			{
-				// cerr << "south west" << endl;
+				// // cerr << "south west" << endl;
 				if (isDestination(i+1, j-1, dest))
 				{
-					// cerr << "he llegao" << endl;
+					// // cerr << "he llegao" << endl;
 					cellDetails[i+1][j-1].parent_i = i;
 					cellDetails[i+1][j-1].parent_j = j;
 					foundDest = true;
@@ -415,7 +419,7 @@ struct PLAYER_NAME : public Player {
 					new_h = calculateHValue(i+1, j-1, dest);
 					new_f = new_g + new_h;
 					
-					if (cellDetails[i+1][j-1].f == INT_MAX or cellDetails[i+1][j-1].f > new_f)
+					if (cellDetails[i+1][j-1].f == MAX_INT or cellDetails[i+1][j-1].f > new_f)
 					{
 						openList.insert(make_pair(new_f, make_pair(i+1, j-1)));
 						cellDetails[i+1][j-1].f        = new_f;
@@ -427,209 +431,385 @@ struct PLAYER_NAME : public Player {
 				}
 			}
 		}
-		// cerr << "wtf" << endl;
+		// // cerr << "wtf" << endl;
 		return Position(-1,-1);
 	}
 	
 	
-	
-//	//mat contains the index's previous position that leads you to fin
-//	//returns the next position you must go from curr to go to fin
-//	Position getNextPos(vector< vector<Position> > &mat, Position fin, Position curr)
-//	{
-//		while(curr.i != fin.i and curr.j != fin.j)
-//		{
-//			if (mat[curr.i][curr.j].i == fin.i and mat[curr.i][curr.j].j == fin.j) return curr;
-//			curr.i = mat[curr.i][curr.j].i;
-//			curr.j = mat[curr.i][curr.j].j;
-//		}
-//		if(curr.i == fin.i and curr.j == fin.j) return curr;
-//		return Position(-1,-1);
-//	}
-//
-//	/*Returns the post position*/
-//	Position bfs(const Position &inicial)
-//	{
-//		Position ini = inicial;
-//		vector<vector<bool>> mat_vis (60, vector<bool>(60, false));						// Visited position matrix
-//		vector<vector<Position>> mat_pos (60, vector<Position>(60, Position(-1,-1))); 	// Previous Pos matrix (each index of the matrix contains its predecesor)
-//		queue<Position> cua_pos;														// Queue that contains the Pos's to visit
-//		cua_pos.push(ini);
-//		int mi = me();
-//
-//		while (!cua_pos.empty())
-//		{
-//			Position currPos = cua_pos.front();
-//			cua_pos.pop();
-//			if (pos_ok(currPos) and not mat_vis[currPos.i][currPos.j])
-//			{
-//				mat_vis[currPos.i][currPos.j] = true;
-//
-//				int winplr = 0;
-//				for (int pl = 1; pl < NUM_PLAYERS; ++pl)
-//				{
-//					if (pl != mi and total_score(winplr) <= total_score(pl)) winplr = pl;
-//				}
-//
-//				int c = post_owner(currPos.i, currPos.j);		//POST
-//				if (c != -2 and c != mi)
-//				{
-//					if (random (0, 3))
-//					{
-//						Position nextPos = getNextPos(mat_pos, ini, currPos);
-//						return nextPos;
-//					}
-//					else if (c == winplr or c == -1)	// si guanyo o no esta ocupat
-//					{
-//						Position nextPos = getNextPos(mat_pos, ini, currPos);
-//						return nextPos;
-//					}
-//				}
-//
-//				for (int k = 0; k < 8; ++k)
-//				{
-//					Position p;
-//					p.i = currPos.i + I[k];
-//					p.j = currPos.j + J[k];
-//
-//					if (pos_ok(p) and not mat_vis[p.i][p.j])
-//					{
-//						cua_pos.push(p);
-//						mat_pos[p.i][p.j] = currPos;
-//					}
-//				}
-//			}
-//
-//		}
-//		return Position(-1,-1);
-//	}
-	
-
-	
-//	/*Returns the post position*/
-//	Position bfs(const Position &inicial)
-//	{
-//		Position ini = inicial;
-//		vector<vector<bool>> mat_vis (60, vector<bool>(60, false));						// Visited position matrix
-//		vector<vector<Position>> mat_pos (60, vector<Position>(60, Position(-1,-1))); 	// Previous Pos matrix (each index of the matrix contains its predecesor)
-//		queue<Position> cua_pos;														// Queue that contains the Pos's to visit
-//		cua_pos.push(ini);
-//		int mi = me();
-//
-//		while (!cua_pos.empty())
-//		{
-//			Position currPos = cua_pos.front();
-//			cua_pos.pop();
-//			if (pos_ok(currPos) and not mat_vis[currPos.i][currPos.j])
-//			{
-//				mat_vis[currPos.i][currPos.j] = true;
-//
-//				int winplr = 0;
-//				for (int pl = 1; pl < NUM_PLAYERS; ++pl) if (pl != mi and total_score(winplr) <= total_score(pl)) winplr = pl;
-//
-//				//POST or ENEMY
-//				if (Board[currPos.i][currPos.j] == 'P' or Board[currPos.i][currPos.j] == 'E')
-//				{
-//					Position nextPos = getNextPos(mat_pos, ini, currPos);
-//					return nextPos;
-//					/*
-//					if (random (0, 3))
-//					{
-//						Position nextPos = getNextPos(mat_pos, ini, currPos);
-//						return nextPos;
-//					}
-//					else if (Board[currPos.i][currPos.j] == 'P' and (post_owner(currPos.i, currPos.j) == winplr or post_owner(currPos.i, currPos.j) == -1))	// si guanyo o no esta ocupat
-//					{
-//						Position nextPos = getNextPos(mat_pos, ini, currPos);
-//						return nextPos;
-//					}
-//					 */
-//				}
-//				for (int k = 0; k < 8; ++k)
-//				{
-//					Position p;
-//					p.i = currPos.i + I[k];
-//					p.j = currPos.j + J[k];
-//
-//					int w = what(p.i, p.j);
-//					if ((w == 1 or w == 2) and not mat_vis[p.i][p.j])
-//					{
-//						cua_pos.push(p);
-//						mat_pos[p.i][p.j] = currPos;
-//					}
-//				}
-//			}
-//		}
-//		return Position(-1,-1);
-//	}
-//
-
-	
-	/*
-	 1. Si adjacent -> ataco
-	 2. En un post meu ocupat per alguns	//TO-DO: quants
-	 3. Per a cada soldat que no estigui a un post -> mirar post mes proper:
-	 		si no és teu -> hi vas
-	 		si és teu -> mirar quanta gent hi ha -> si suficients, buscar seguent post
-	 (tenir en compte quanta punts)
-	*/
-	Position find_nearest_post(const Position& src)
+	Position find_nearest_post_or_enemy(const Position& src)
 	{
-		auto postes = posts();
-		int min_distance = INT_MAX;
+		int min_distance = MAX_INT;
 		Position min_distance_pos = src;
-		for (auto& post : postes)
+		
+		for (int i = 0; i < 60; i++)
 		{
-			int distance = calculateHValue(src.i, src.j, post.pos);
-			if (distance < min_distance and post_owner(post.pos.i, post.pos.j) != -2 and post_owner(post.pos.i, post.pos.j) != me())
+			for (int j = 0; j < 60; j++)
 			{
-				min_distance = distance;
-				min_distance_pos = post.pos;
+				if (Board[i][j] == 'E' or Board[i][j] == 'P')
+				{
+					int distance = calculateHValue(src.i, src.j, Position(i,j));
+					if (distance < min_distance)
+					{
+						min_distance = distance;
+						min_distance_pos = Position(i,j);
+					}
+				}
 			}
 		}
 		return min_distance_pos;
 	}
 	
-  	void play_soldier(int id)	//mira adjacents i si pot, ataca. si no pot, es mou amb random
+  	void play_soldier(int id)
 	{
 		Data in = data(id);
-		int i = in.pos.i;
-		int j = in.pos.j;
-		int player = in.player;
-		int ii, jj;
-		
-		for (int k = 0; k < 8; ++k)	//totes les posicions adjacents
+
+		for (int k = 0; k < 8; ++k)		// adj enemy or post -> go
 		{
-			ii = i + I[k];
-		  	jj = j + J[k];
+			int ii = in.pos.i + I[k];
+		  	int jj = in.pos.j + J[k];
 		  	if (pos_ok(ii,jj))
 			{
-				int id2 = which_soldier(ii, jj);
-				if (id2 and data(id2).player != player) //enemic al costat -> ataquem
+				if (Board[ii][jj] == 'E' or Board[ii][jj] == 'P')
 				{
-				  command_soldier(id, ii, jj);
-				  return;
+					command_soldier(id, ii, jj);
+					return;
 				}
 		  	}
     	}
-		
-		//MODIFICAR -> BORRAR
-		//pilla un random en cas de no poder atacar
-		//    	ii = i + random(-1, 1);
-		//		jj = j + random(-1, 1);
-		//
-		//		if (pos_ok(ii, jj)) command_soldier(id, ii, jj);
-		
-		//EL QUE REALMENT HAIG DE FER
-		//buscar cami -> dijkstra o com putes s'escrigui
-	
-		Position nearest_post = find_nearest_post(in.pos);
+		Position nearest_post = find_nearest_post_or_enemy(in.pos);
 		Position next = aStarSearch(in.pos, nearest_post, id);
 		command_soldier(id, next.i, next.j);
   	}
 	
 	
-	int quadrant(int i, int j)
+	
+	/*--------------------------------------------------------*/
+	/*---------------------- HELICOPTER ----------------------*/
+	/*--------------------------------------------------------*/
+	
+//	struct Node_HEL
+//	{
+//		int parent_i, parent_j;
+//		int parent_o;
+//		int f, g, h;
+//	};
+//
+//	bool isValid_HEL(int row, int col, int id)	//si helicopter pot passar
+//	{
+//		bool valid = true;
+//		for (int i = row - 2 ; i <= row + 2; i++)
+//		{
+//			for (int j = col - 2; j <= col + 2; j++)
+//			{
+//				if (valid)
+//				{
+//					if (not pos_ok(i, j) or what(i, j) == 4) valid = false;
+//				}
+//			}
+//		}
+//		return valid;
+//	}
+//
+//	int calculateHValue_HEL(int row, int col, Position dest)
+//	{
+//		return (abs(row - col) + abs(dest.i - dest.j));		//MANHATTAN DISTANCE
+//	}
+//
+//	bool isDestination_HEL(const int i, const int j, const Position &destination)
+//	{
+//		return i == destination.i and j == destination.j;
+//	}
+//
+//	Position tracePath_HEL(vector< vector<Node_HEL> > &cellDetails, const Position &dst, const Position &src)
+//	{
+//		int row = dst.i;
+//		int col = dst.j;
+//
+//		// // cerr << "tracing path...";
+//
+//		stack<pair<int, int>> path;
+//
+//		while (not (cellDetails[row][col].parent_i == row and cellDetails[row][col].parent_j == col))
+//		{
+//			// // cerr << "in row: " << row << " col: " << col << endl;
+//			path.push(make_pair(row, col));
+//			int temp_row = cellDetails[row][col].parent_i;
+//			int temp_col = cellDetails[row][col].parent_j;
+//			row = temp_row;
+//			col = temp_col;
+//			// // cerr << "out row: " << row << " col: " << col << endl;
+//		}
+//
+//		Position p;
+//		p.i = path.top().first;
+//		p.j = path.top().second;
+//
+//		// // cerr << "done";
+//		return p;
+//	}
+//
+//
+//	// A* hel
+//	pair<Position, int> aStarSearch_HEL(const Position &src, const Position &dest, int id)		//retorna un parell de: <posicio, oridentacio>
+//	{
+//		Data id2 = data(id);
+//		int orient = id2.orientation;
+//
+//		if (isDestination_HEL(src.i, src.j, dest)) return make_pair(src, orient);
+//		if (not isValid_HEL(src.i, src.j, id) or not isValid_HEL(dest.i, dest.j, id)) return make_pair(Position(-1,-1), -1);
+//
+//		vector< vector<int> > closedList (60, vector<int> (60, 0));	//matriu de mantisses -> explicat a sota
+//		// cerr << "Source: (" << src.i << " " << src.j << ")      Dest: (" << dest.i << " " << dest.j << ")" << endl;
+//		// cerr << "Orientation src: " << orient << endl;
+//
+//		Node_HEL n;
+//		n.parent_o = -1;
+//		n.parent_i = -1;
+//		n.parent_j = -1;
+//		n.f = MAX_INT;
+//		n.g = MAX_INT;
+//		n.h = MAX_INT;
+//		vector< vector<Node_HEL> > cellDetails(60, vector<Node_HEL> (60, n));
+//
+//		cellDetails[src.i][src.j].f        = 0;
+//		cellDetails[src.i][src.j].g        = 0;
+//		cellDetails[src.i][src.j].h        = 0;
+//		cellDetails[src.i][src.j].parent_i = src.i;
+//		cellDetails[src.i][src.j].parent_j = src.j;
+//		cellDetails[src.i][src.j].parent_o = orient;
+//
+//		set< pair<int, pair< pair<int, int>, int> > > openList;		// f , pair (position, orientation)
+//		openList.insert(make_pair(0, make_pair(make_pair(src.i, src.j), orient)));
+//		bool foundDest = false;
+//
+//		while (not openList.empty())
+//		{
+//			pair<int, pair< pair<int, int>, int> > p = *(openList.begin());
+//			openList.erase(openList.begin());
+//			int i = p.second.first.first;
+//			int j = p.second.first.second;
+//
+//			/*			orientation		 mantisa
+//			 	south 		= 0			0001 =  1
+//			 	east  		= 1			0010 =  2
+//			 	north 		= 2			0100 =  4
+//			 	west  		= 3			1000 =  8
+//			*/
+//
+//			int o = cellDetails[i][j].parent_o;
+//			if      (o == 0) closedList[i][j] |= 1; 	// south
+//			else if (o == 1) closedList[i][j] |= 2;		// east
+//			else if (o == 2) closedList[i][j] |= 4;		// north
+//			else if (o == 3) closedList[i][j] |= 8;		// west
+//
+//			// cerr << "----------------------" << closedList[i][j] << endl;
+//
+//			int new_f;
+//			int new_g;
+//			int new_h;
+//
+//			/*
+//			 Generating all the 8 successor of this cell
+//
+//			 N.W    N     N.E
+//			  \     |     /
+//			   \    |    /
+//			 W---- Cell ----E
+//			   /    |    \
+//			  /     |     \
+//			 S.W    S     S.E
+//
+//			 Cell-->Popped Cell 	(i, j)
+//			 N -->  North       	(i-1, j)
+//			 S -->  South       	(i+1, j)
+//			 E -->  East        	(i, j+1)
+//			 W -->  West         	(i, j-1)
+//			 N.E--> North-East  	(i-1, j+1)
+//			 N.W--> North-West  	(i-1, j-1)
+//			 S.E--> South-East  	(i+1, j+1)
+//			 S.W--> South-West  	(i+1, j-1)
+//			 */
+//
+//			int new_i = -1; int new_j = -1;
+//			int new_o = o;
+//			int andpersand = 0;
+//
+//			// FORWARD 1
+//			if      (o == 0) { new_i = i + 1; new_j = j; andpersand = 1;}			// SOUTH
+//			else if (o == 1) { new_i = i; new_j = j + 1; andpersand = 2;}			// EAST
+//			else if (o == 2) { new_i = i - 1; new_j = j; andpersand = 4;} 			// NORTH
+//			else if (o == 3) { new_i = i; new_j = j - 1; andpersand = 8;} 			// WEST
+//
+//
+//			if (isValid_HEL(new_i, new_j, id))
+//			{
+//				if (isDestination(new_i, new_j, dest))
+//				{	// Es mi destino
+//					cellDetails[new_i][new_j].parent_i = i;
+//					cellDetails[new_i][new_j].parent_j = j;
+//					cellDetails[new_i][new_j].parent_o = o;
+//					foundDest = true;
+//					// cerr << "Destino forward1" << endl;
+//					return make_pair(tracePath_HEL(cellDetails, dest, src), new_o);
+//				}
+//				else if ((closedList[new_i][new_j]&andpersand) == 0) // orientacio no visitada
+//				{	// No es mi destino y hay que iterarlo
+//					new_g = cellDetails[i][j].g + 1;
+//					new_h = calculateHValue_HEL(new_i, new_j, dest);
+//					new_f = new_g + new_h;
+//					// cerr << "No visitado forward1" << endl;
+//					if (cellDetails[new_i][new_j].f == MAX_INT or cellDetails[new_i][new_j].f >= new_f)
+//					{
+//						// cerr << "Inserto forward1" << endl;
+//						openList.insert(make_pair(new_f, make_pair(make_pair(new_i, new_j), new_o)));
+//						cellDetails[new_i][new_j].f        = new_f;
+//						cellDetails[new_i][new_j].g        = new_g;
+//						cellDetails[new_i][new_j].h        = new_h;
+//						cellDetails[new_i][new_j].parent_i = i;
+//						cellDetails[new_i][new_j].parent_j = j;
+//						cellDetails[new_i][new_j].parent_o = o;
+//					}
+//				}
+//			}
+//
+//			// FORWARD 2
+//			if      (o == 0) { new_i = i + 2; new_j = j; andpersand = 1;}			// SOUTH
+//			else if (o == 1) { new_i = i; new_j = j + 2; andpersand = 2;}			// EAST
+//			else if (o == 2) { new_i = i - 2; new_j = j; andpersand = 4;} 			// NORTH
+//			else if (o == 3) { new_i = i; new_j = j - 2; andpersand = 8;} 			// WEST
+//
+//			if (isValid_HEL(new_i, new_j, id))
+//			{
+//				if (isDestination(new_i, new_j, dest))
+//				{	// Es mi destino
+//					cellDetails[new_i][new_j].parent_i = i;
+//					cellDetails[new_i][new_j].parent_j = j;
+//					cellDetails[new_i][new_j].parent_o = o;
+//					foundDest = true;
+//					// cerr << "Destino forward2" << endl;
+//					return make_pair(tracePath_HEL(cellDetails, dest, src), new_o);
+//				}
+//				else if ((closedList[new_i][new_j]&andpersand) == 0) // orientacio no visitada
+//				{	// No es mi destino y hay que iterarlo
+//					new_g = cellDetails[i][j].g + 1;
+//					new_h = calculateHValue_HEL(new_i, new_j, dest);
+//					new_f = new_g + new_h;
+//					// cerr << "No visitado forward2" << endl;
+//					if (cellDetails[new_i][new_j].f == MAX_INT or cellDetails[new_i][new_j].f >= new_f)
+//					{
+//						// cerr << "Inserto forward2" << endl;
+//						openList.insert(make_pair(new_f, make_pair(make_pair(new_i, new_j), new_o)));
+//						cellDetails[new_i][new_j].f        = new_f;
+//						cellDetails[new_i][new_j].g        = new_g;
+//						cellDetails[new_i][new_j].h        = new_h;
+//						cellDetails[new_i][new_j].parent_i = i;
+//						cellDetails[new_i][new_j].parent_j = j;
+//						cellDetails[new_i][new_j].parent_o = o;
+//					}
+//				}
+//			}
+//
+//
+//
+//			// CLOCKWISE
+//			if      (o == 0) {new_o = 3; andpersand = 8;}			// SOUTH -> west
+//			else if (o == 1) {new_o = 0; andpersand = 1;}			// EAST -> south
+//			else if (o == 2) {new_o = 1; andpersand = 2;}			// NORTH -> east
+//			else if (o == 3) {new_o = 2; andpersand = 4;} 			// WEST -> north
+//			new_i = i; new_j = j; 			//per girar al mateix lloc però orientacio diferent
+//
+//			if (isValid_HEL(new_i, new_j, id))
+//			{
+//				if (isDestination(new_i, new_j, dest))
+//				{
+//					// cerr << "Destino clock" << endl;
+//					cellDetails[new_i][new_j].parent_i = i;
+//					cellDetails[new_i][new_j].parent_j = j;
+//					cellDetails[new_i][new_j].parent_o = o;
+//					foundDest = true;
+//					return make_pair(tracePath_HEL(cellDetails, dest, src), new_o);
+//				}
+//				else if ((closedList[new_i][new_j]&andpersand) == 0) // orientacio no visitada
+//				{	// No es mi destino y hay que iterarlo
+//					new_g = cellDetails[i][j].g + 1;
+//					new_h = calculateHValue_HEL(new_i, new_j, dest);
+//					new_f = new_g + new_h;
+//					// cerr << "No visitado clock" << endl;
+//					if (cellDetails[new_i][new_j].f == MAX_INT or cellDetails[new_i][new_j].f >= new_f)
+//					{
+//						// cerr << "Inserto clock" << endl;
+//						openList.insert(make_pair(new_f, make_pair(make_pair(new_i, new_j), new_o)));
+//						cellDetails[new_i][new_j].f        = new_f;
+//						cellDetails[new_i][new_j].g        = new_g;
+//						cellDetails[new_i][new_j].h        = new_h;
+//						cellDetails[new_i][new_j].parent_i = i;
+//						cellDetails[new_i][new_j].parent_j = j;
+//						cellDetails[new_i][new_j].parent_o = o;
+//					}
+//				}
+//			}
+//
+//			// COUNTER CLOCKWISE
+//			if      (orient == 0) {new_o = 1; andpersand = 2;}		// SOUTH -> east
+//			else if (orient == 1) {new_o = 2; andpersand = 4;}		// EAST -> north
+//			else if (orient == 2) {new_o = 3; andpersand = 8;}		// NORTH -> west
+//			else if (orient == 3) {new_o = 0; andpersand = 1;}		// WEST -> south
+//			new_i = i; new_j = j; 			//per girar al mateix lloc però orientacio diferent
+//
+//			if (isValid_HEL(new_i, new_j, id))
+//			{
+//				if (isDestination(new_i, new_j, dest))
+//				{	// Es mi destino
+//					// cerr << "Destino anti clock" << endl;
+//					cellDetails[new_i][new_j].parent_i = i;
+//					cellDetails[new_i][new_j].parent_j = j;
+//					cellDetails[new_i][new_j].parent_o = o;
+//					foundDest = true;
+//					return make_pair(tracePath_HEL(cellDetails, dest, src), new_o);
+//				}
+//				else if ((closedList[new_i][new_j]&andpersand) == 0) // orientacio no visitada
+//				{	// No es mi destino y hay que iterarlo
+//					new_g = cellDetails[i][j].g + 1;
+//					new_h = calculateHValue_HEL(new_i, new_j, dest);
+//					new_f = new_g + new_h;
+//					// cerr << "No visitado anti clock" << endl;
+//					if (cellDetails[new_i][new_j].f == MAX_INT or cellDetails[new_i][new_j].f >= new_f)
+//					{
+//						// cerr << "Inserto anti clock" << endl;
+//						openList.insert(make_pair(new_f, make_pair(make_pair(new_i, new_j), new_o)));
+//						cellDetails[new_i][new_j].f        = new_f;
+//						cellDetails[new_i][new_j].g        = new_g;
+//						cellDetails[new_i][new_j].h        = new_h;
+//						cellDetails[new_i][new_j].parent_i = i;
+//						cellDetails[new_i][new_j].parent_j = j;
+//						cellDetails[new_i][new_j].parent_o = o; //sobreescriu?
+//					}
+//				}
+//			}
+//		}
+//		// cerr << "wtf" << endl;
+//		return make_pair(Position(-2,-2), -2);
+//	}
+//
+//
+//	Position find_nearest_post_HEL(const Position& src)	// Returns neerest post
+//	{
+//		auto postes = posts();
+//		int min_distance = MAX_INT;
+//		Position min_distance_pos = src;
+//		for (auto& post : postes)
+//		{
+//			int distance = calculateHValue(src.i, src.j, post.pos);
+//			if (distance < min_distance and post_owner(post.pos.i, post.pos.j) != -2 and post_owner(post.pos.i, post.pos.j) != me())
+//			{
+//				min_distance = distance;
+//				min_distance_pos = post.pos;
+//			}
+//		}
+//		return min_distance_pos;
+//	}
+
+	int quadrant(int i, int j)	// returns whitch quadrant is it
 	{
 		if (( 0 <= i and i <= 29) and ( 0 <= j and j <= 29)) return 0;
 		if ((30 <= i and i <= 59) and ( 0 <= j and j <= 29)) return 1;
@@ -637,19 +817,14 @@ struct PLAYER_NAME : public Player {
 		if ((30 <= i and i <= 59) and (30 <= j and j <= 59)) return 3;
 		return -1;
 	}
-
 	
-	/*
-	 1. Si no estic al meu quadrant / a sota hi tinc més jugadors -> tiro napalm
-	 2. Anar cap als llocs dels enemics de 2 en 2 (adjacents), perque no pots anar en diagonal
-	 3. Si arribes al final / muntanya, girar 90 graus.
-	*/
-	void play_helicopter(int id)	//tira napalm si pot i es va movent endavant (20% de girar clockwise)
+	
+
+	void play_helicopter(int id)
 	{
 		Data in = data(id);
 		
-		/*------- 1 -------*/
-		if (in.napalm == 0) //data(id).napalm = 0 quan no t'has desperar rondes per llençar-lo
+		if (in.napalm == 0) // napalm available
 		{
 			int own = 0;
 			int others = 0;
@@ -660,7 +835,7 @@ struct PLAYER_NAME : public Player {
 					if (pos_ok(ii, jj))
 					{
 						int s = which_soldier(ii, jj);
-						if (s > 0) //hi ha un soldat
+						if (s > 0) // there's a soldier
 						{
 							Data d = data(s);
 							if (d.player != me()) ++others;
@@ -675,70 +850,82 @@ struct PLAYER_NAME : public Player {
 				return;
 			}
 		}
-		/*------- /1 -------*/
 		
-		/*------- 2 -------*/
 		int ii = in.pos.i;
 		int jj = in.pos.j;
-		if (pos_ok(ii, jj))
-		{
-			int o = in.orientation;
-			if ((o == 0 and pos_ok(ii - 1, jj) and what(ii - 1, jj) != 4)	//SOUTH
-				or
-				(o == 1 and pos_ok(ii, jj + 1) and what(ii, jj + 1) != 4)	//EAST
-				or
-				(o == 2 and pos_ok(ii + 1, jj) and what(ii + 1, jj) != 4)	//NORTH
-				or
-				(o == 3 and pos_ok(ii, jj - 1) and what(ii, jj - 1) != 4)	//WEST
-				)
-			{
-				command_helicopter(id, FORWARD2); //si no pot fer 2, en fara 1
-			}
-		/*------- /2 -------*/
-		/*------- 3 -------*/
-			else
-			{
-				int q = quadrant(ii, jj);
-				if (o == 0 or o == 2)	//SOUTH or NORTH
-				{
-					//no puc passar -> vaig al de la dreta
-					if (q == 0 or q == 2) command_helicopter(id, COUNTER_CLOCKWISE);
-					//no puc passar -> vaig al de l'esquerra
-					else if (q == 1 or q == 3) command_helicopter(id, CLOCKWISE);
-					
-				}
-				else if (o == 1 or o == 3) //EAST or WEST
-				{
-					//mo puc passar -> vaig al d'abaix
-					if (q == 0 or q == 1) command_helicopter(id, CLOCKWISE);
-					//no no puc passar -> vaig al de dalt
-					else if (q == 2 or q == 3) command_helicopter(id, COUNTER_CLOCKWISE);
-				}
-			}
-			return;
-		}
-		/*------- /3 -------*/
-
-		//MODIFICAR
-		// With probability 20% we turn counter clockwise,
-		// otherwise we try to move forward two steps.
-		int c = random(1, 5);
-		command_helicopter(id, c == 1 ? COUNTER_CLOCKWISE : FORWARD2);
+		int oo = in.orientation;
+		
+		// TO-DO: ir hacia post que no es tuyo -> napalm + conquistar
+		if ((round() == 0) or (oo == 0 and ii == 56) or (oo == 1 and jj == 56) or (oo == 2 and ii == 3) or (oo == 3 and jj == 3))  command_helicopter(id, CLOCKWISE);
+		else command_helicopter(id, FORWARD2);
+		
+//		if (pos_ok(ii, jj))
+//		{
+//			Position nearest_post = find_nearest_post_HEL(in.pos);
+//			pair<Position, int> nextp = aStarSearch_HEL(in.pos, nearest_post, id);
+//			//Position next = nextp.first;
+//			int next_o = nextp.second;
+//
+//			// cerr << "ACTUAL: (" << ii << ", " << jj << ") ORIENT: "  << oo << endl;
+//			// cerr << "NEXT: (" << next.i << ", " << next.j << ") ORIENT: "  << next_o << endl;
+//
+//			if (oo != next_o)
+//			{
+//				switch (oo)
+//				{
+//					case 0:
+//						if (next_o == 1) command_helicopter(id, COUNTER_CLOCKWISE);
+//						else command_helicopter(id, CLOCKWISE);
+//						break;
+//					case 1:
+//						if (next_o == 2) command_helicopter(id, COUNTER_CLOCKWISE);
+//						else command_helicopter(id, CLOCKWISE);
+//						break;
+//					case 2:
+//						if (next_o == 3) command_helicopter(id, COUNTER_CLOCKWISE);
+//						else command_helicopter(id, CLOCKWISE);
+//						break;
+//					default:		//3
+//						if (next_o == 0) command_helicopter(id, COUNTER_CLOCKWISE);
+//						else command_helicopter(id, CLOCKWISE);
+//						break;
+//				}
+//				// cerr << "GIRO" << endl;
+//				return;
+//			}
+//			else // if (ii != next.i or jj != next.j)
+//			{
+//				command_helicopter(id, FORWARD2);
+//				// cerr << "AVANÇO" << endl;
+//				return;
+//			}
+//		}
+//
+//		if (oo == 0 and isValid_HEL(ii-2, jj, id)) command_helicopter(id, FORWARD2);
+//		else if (oo == 1 and isValid_HEL(ii, jj+2, id)) command_helicopter(id, FORWARD2);
+//		else if (oo == 2 and isValid_HEL(ii+2, jj, id)) command_helicopter(id, FORWARD2);
+//		else if (oo == 3 and isValid_HEL(ii, jj-2, id)) command_helicopter(id, FORWARD2);
+//		else command_helicopter(id, CLOCKWISE);
+//		return;
   	}
-
-	void throw_parachuter(int helicopter_id) //pilla posicio random dins del helicopter, i el tira
+	
+	/*--------------------------------------------------------*/
+	/*---------------------- PARACHUTER ----------------------*/
+	/*--------------------------------------------------------*/
+	
+	void throw_parachuter(int helicopter_id)
 	{
-		if (round()%2 == 0)	//cada 2 rondes per no haver d'estar tot el rato tirant
+		if (round() % 2 == 0) 	//every 2 rounds ("random")
 		{
 			Data in = data(helicopter_id);
-			for (int ii = in.pos.i - 2; ii <= in.pos.i + 2; ii++)
-			{
+			
+			for (int ii = in.pos.i - 2; ii <= in.pos.i + 2; ii++) {
 				for (int jj = in.pos.j - 2; jj <= in.pos.j + 2; jj++)
 				{
-					if (fire_time(ii, jj) == 0 and what(ii, jj) != 3)
-					{ //no fire and correct position && no water (no pot ser mountain perq no hi van els helicopters)
+					if (fire_time(ii, jj) == 0 and what(ii, jj) <= 2) //no fire && valid
+					{
 						int s = which_soldier(ii, jj);
-						if (s == 0 or s == -1)	//no hi ha soldats abaix
+						if (s == 0 or s == -1)	// no soldiers below
 						{
 							command_parachuter(ii, jj);
 							return;
@@ -749,9 +936,10 @@ struct PLAYER_NAME : public Player {
 		}
   	}
   
-	/**
-	* Play method, invoked once per each round.
-	*/
+
+	/*--------------------------------------------------------*/
+	/*------------------------- PLAY -------------------------*/
+	/*--------------------------------------------------------*/
   	virtual void play ()
 	{
 
@@ -760,16 +948,14 @@ struct PLAYER_NAME : public Player {
     	vector<int> H = helicopters(player); 	// helicopters of my player
     	vector<int> S = soldiers(player); 		// soldiers of my player
 	
-		//1r parachuters
-		//MODIFICAR
-		// If in a random helicopter I have parachuters, I throw one.
-		int helicopter_id = H[random(0, int(H.size()-1))];
+		// PARACHUTERS
+		int helicopter_id = H[random(0, int(H.size()-1))];	// If in a random helicopter I have parachuters, I throw one.
 		if (not data(helicopter_id).parachuters.empty()) throw_parachuter(helicopter_id);
 		
-		//2n helicopters
+		// HELICOPTERS
 		for (int i = 0; i < int(H.size()); ++i) play_helicopter(H[i]);
 		
-		//3r soldats
+		// SOLDIERS
 		for (int i = 0; i < int(S.size()); ++i) play_soldier(S[i]);
   	}
 	

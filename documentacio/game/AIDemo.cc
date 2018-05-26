@@ -89,7 +89,7 @@ struct PLAYER_NAME : public Player {
     VE S =    soldiers(player); //    soldiers of my player
 
     // If in a random helicopter I have parachuters, I throw one.
-    int helicopter_id = H[random(0, H.size()-1)];
+    int helicopter_id = H[random(0, int(H.size()-1))];
     if (not data(helicopter_id).parachuters.empty()) throw_parachuter(helicopter_id);
 
     for (int i = 0; i < (int)H.size(); ++i) play_helicopter(H[i]);
